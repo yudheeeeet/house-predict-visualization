@@ -1,0 +1,332 @@
+# app.R
+
+# Load required libraries
+library(shiny)
+library(shinydashboard)
+library(dplyr)
+library(ggplot2)
+library(DT)
+library(scales)
+library(tidyr)
+library(leaflet)
+library(readr)
+library(stringr)
+
+# Data loading function with proper error handling
+load_house_data <- function() {
+  tryCatch({
+    # Use the exact file name from your directory
+    data_path <- "jabodetabek_house_price.csv"
+    
+    if (!file.exists(data_path)) {
+      stop("Data file not found at: ", data_path)
+    }
+    
+    data <- read_csv(data_path)
+    
+    # Data preprocessing
+    data <- data %>%
+      na.omit() %>%
+      mutate(
+        price_billion = price_in_rp / 1e9,  # Convert to billions
+        price_per_sqm = price_in_rp / building_size_m2,
+        location = factor(str_to_title(district))  # Capitalize location names
+      ) %>%
+      filter(
+        price_billion > 0,
+        building_size_m2 > 0
+      )
+    
+    return(data)
+  }, error = function(e) {
+    message("Error loading data: ", e$message)
+    # Create sample data if file not found
+    message("Creating sample data instead...")
+    
+    # Generate sample data
+    set.seed(123)  # for reproducibility
+    sample_data <- data.frame(
+      location = rep(c("Jakarta", "Bogor", "Depok", "Tangerang", "Bekasi"), each=20),
+      price = runif(100, 500000000, 5000000000),
+      building_size_m2 = runif(100, 36, 500),
+      land_size_m2 = runif(100, 60, 1000)
+    ) %>%
+      mutate(
+        price_billion = price_in_rp / 1e9,
+        price_per_sqm = price_in_rp / building_size_m2,
+        location = factor(location)
+      )
+    
+    return(sample_data)
+  })
+}
+
+# UI Definition
+ui <- dashboardPage(
+  dashboardHeader(title = "Analisis Harga Rumah Jabodetabek"),
+  
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Overview", tabName = "overview", icon = icon("dashboard")),
+      menuItem("Analisis Harga", tabName = "price_analysis", icon = icon("chart-line")),
+      menuItem("Data", tabName = "data", icon = icon("table"))
+    )
+  ),
+  
+  dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        .content-wrapper, .right-side {
+          background-color: #f4f6f9;
+        }
+      "))
+    ),
+    
+    tabItems(
+      # Overview Tab
+      tabItem(tabName = "overview",
+              fluidRow(
+                valueBoxOutput("avg_price", width = 3),
+                valueBoxOutput("med_price", width = 3),
+                valueBoxOutput("total_listings", width = 3),
+                valueBoxOutput("avg_size", width = 3)
+              ),
+              fluidRow(
+                box(
+                  title = "Distribusi Harga Rumah",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotOutput("price_dist"),
+                  width = 8
+                ),
+                box(
+                  title = "Statistik per Wilayah",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotOutput("region_stats"),
+                  width = 4
+                )
+              )
+      ),
+      
+      # Price Analysis Tab
+      tabItem(tabName = "price_analysis",
+              fluidRow(
+                box(
+                  title = "Kontrol",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  width = 3,
+                  uiOutput("region_selector"),
+                  uiOutput("price_range_slider"),
+                  uiOutput("size_input")
+                ),
+                box(
+                  title = "Hubungan Harga dan Luas Bangunan",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotOutput("price_size_scatter"),
+                  width = 9
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Harga per Meter Persegi per Wilayah",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotOutput("price_per_sqm"),
+                  width = 12
+                )
+              )
+      ),
+      
+      # Data Tab
+      tabItem(tabName = "data",
+              fluidRow(
+                box(
+                  title = "Dataset Rumah Jabodetabek",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  DTOutput("house_data"),
+                  width = 12
+                )
+              )
+      )
+    )
+  )
+)
+
+# Server Definition
+server <- function(input, output, session) {
+  # Load data
+  houses_data <- tryCatch({
+    load_house_data()
+  }, error = function(e) {
+    showNotification(
+      "Error loading data. Please check your internet connection.",
+      type = "error"
+    )
+    return(NULL)
+  })
+  
+  # Dynamic UI elements
+  output$region_selector <- renderUI({
+    req(houses_data)
+    regions <- c("Semua", unique(houses_data$location))
+    selectInput("region", "Pilih Wilayah:", choices = regions)
+  })
+  
+  output$price_range_slider <- renderUI({
+    req(houses_data)
+    max_price <- ceiling(max(houses_data$price_billion))
+    sliderInput("price_range", "Range Harga (Miliar):",
+                min = 0, max = max_price, value = c(0, max_price))
+  })
+  
+  output$size_input <- renderUI({
+    req(houses_data)
+    numericInput("min_size", "Luas Minimum (m²):",
+                 value = 0, min = 0)
+  })
+  
+  # Reactive data filtering
+  filtered_data <- reactive({
+    req(houses_data, input$region, input$price_range, input$min_size)
+    
+    data <- houses_data
+    
+    if (input$region != "Semua") {
+      data <- data %>% filter(location == input$region)
+    }
+    
+    data %>%
+      filter(
+        price_billion >= input$price_range[1],
+        price_billion <= input$price_range[2],
+        building_size_m2 >= input$min_size
+      )
+  })
+  
+  # Value Boxes
+  output$avg_price <- renderValueBox({
+    req(filtered_data())
+    avg <- mean(filtered_data()$price_billion)
+    valueBox(
+      paste0("Rp ", round(avg, 2), " M"),
+      "Rata-rata Harga",
+      icon = icon("money-bill"),
+      color = "green"
+    )
+  })
+  
+  output$med_price <- renderValueBox({
+    req(filtered_data())
+    med <- median(filtered_data()$price_billion)
+    valueBox(
+      paste0("Rp ", round(med, 2), " M"),
+      "Median Harga",
+      icon = icon("chart-line"),
+      color = "purple"
+    )
+  })
+  
+  output$total_listings <- renderValueBox({
+    req(filtered_data())
+    valueBox(
+      nrow(filtered_data()),
+      "Total Listing",
+      icon = icon("list"),
+      color = "blue"
+    )
+  })
+  
+  output$avg_size <- renderValueBox({
+    req(filtered_data())
+    avg <- mean(filtered_data()$building_size_m2)
+    valueBox(
+      paste0(round(avg, 0), " m²"),
+      "Rata-rata Luas Bangunan",
+      icon = icon("home"),
+      color = "red"
+    )
+  })
+  
+  # Plots
+  output$price_dist <- renderPlot({
+    req(filtered_data())
+    ggplot(filtered_data(), aes(x = price_billion)) +
+      geom_histogram(fill = "steelblue", bins = 30) +
+      theme_minimal() +
+      labs(
+        title = "Distribusi Harga Rumah",
+        x = "Harga (Miliar Rupiah)",
+        y = "Jumlah"
+      )
+  })
+  
+  output$region_stats <- renderPlot({
+    req(filtered_data())
+    filtered_data() %>%
+      group_by(location) %>%
+      summarise(avg_price = mean(price_billion)) %>%
+      ggplot(aes(x = reorder(location, -avg_price), y = avg_price)) +
+      geom_bar(stat = "identity", fill = "lightblue") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(
+        title = "Rata-rata Harga per Wilayah",
+        x = "Wilayah",
+        y = "Harga (Miliar Rupiah)"
+      )
+  })
+  
+  output$price_size_scatter <- renderPlot({
+    req(filtered_data())
+    ggplot(filtered_data(), aes(x = building_size_m2, y = price_billion)) +
+      geom_point(alpha = 0.5) +
+      geom_smooth(method = "lm", se = FALSE, color = "red") +
+      theme_minimal() +
+      labs(
+        title = "Hubungan Harga dan Luas Bangunan",
+        x = "Luas Bangunan (m²)",
+        y = "Harga (Miliar Rupiah)"
+      )
+  })
+  
+  output$price_per_sqm <- renderPlot({
+    req(filtered_data())
+    ggplot(filtered_data(), aes(x = location, y = price_per_sqm)) +
+      geom_boxplot(fill = "lightblue") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(
+        title = "Distribusi Harga per Meter Persegi",
+        x = "Wilayah",
+        y = "Harga per m² (Juta Rupiah)"
+      )
+  })
+  
+  # Data Table
+  output$house_data <- renderDT({
+    req(filtered_data())
+    filtered_data() %>%
+      select(location, price_billion, building_size_m2, land_size_m2, price_per_sqm) %>%
+      rename(
+        "Lokasi" = location,
+        "Harga (Miliar)" = price_billion,
+        "Luas Bangunan (m²)" = building_size_m2,
+        "Luas Tanah (m²)" = land_size_m2,
+        "Harga/m²" = price_per_sqm
+      ) %>%
+      datatable(
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE
+        ),
+        rownames = FALSE
+      )
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)

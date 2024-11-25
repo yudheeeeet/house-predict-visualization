@@ -1,0 +1,51 @@
+{
+    "debugBreakpointsState": {
+        "breakpoints": [
+            {
+                "id": 1,
+                "path": "~/Documents/Materi Kuliah S2 (Yudit)/Eksplorasi dan Visualisasi Data/shiny-dashboardvisdat/shiny-visdat/app.R",
+                "line_number": 35,
+                "function_steps": "",
+                "function_name": "toplevel",
+                "state": 1,
+                "editor_state": 1,
+                "editor_line_number": 35,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": false,
+                "type": 1,
+                "is_package_breakpoint": false,
+                "package_name": ""
+            },
+            {
+                "id": 2,
+                "path": "~/Documents/Materi Kuliah S2 (Yudit)/Eksplorasi dan Visualisasi Data/shiny-dashboardvisdat/shiny-visdat/app.R",
+                "line_number": 32,
+                "function_steps": "",
+                "function_name": "toplevel",
+                "state": 1,
+                "editor_state": 1,
+                "editor_line_number": 32,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": false,
+                "type": 1,
+                "is_package_breakpoint": false,
+                "package_name": ""
+            },
+            {
+                "id": 3,
+                "path": "~/Documents/Materi Kuliah S2 (Yudit)/Eksplorasi dan Visualisasi Data/shiny-dashboardvisdat/shiny-visdat/app.R",
+                "line_number": 183,
+                "function_steps": "",
+                "function_name": "toplevel",
+                "state": 1,
+                "editor_state": 1,
+                "editor_line_number": 183,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": false,
+                "type": 1,
+                "is_package_breakpoint": false,
+                "package_name": ""
+            }
+        ]
+    }
+}
