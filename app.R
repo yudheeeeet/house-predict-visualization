@@ -1,5 +1,8 @@
 # app.R
 
+# Pastikan untuk menambahkan library plotly di bagian awal script
+library(plotly)
+
 # Load required libraries
 library(shiny)
 library(shinydashboard)
@@ -16,7 +19,7 @@ library(stringr)
 load_house_data <- function() {
   tryCatch({
     # Use the exact file name from your directory
-    data_path <- "jabodetabek_house_price.csv"
+    data_path <- "data_new.csv"
     
     if (!file.exists(data_path)) {
       stop("Data file not found at: ", data_path)
@@ -30,7 +33,9 @@ load_house_data <- function() {
       mutate(
         price_billion = price_in_rp / 1e9,  # Convert to billions
         price_per_sqm = price_in_rp / building_size_m2,
-        location = factor(str_to_title(district))  # Capitalize location names
+        location = factor(str_to_title(city)),  # Capitalize location names
+        floors = floors,
+        furnishing = factor(furnishing)
       ) %>%
       filter(
         price_billion > 0,
@@ -69,7 +74,9 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Overview", tabName = "overview", icon = icon("dashboard")),
       menuItem("Analisis Harga", tabName = "price_analysis", icon = icon("chart-line")),
-      menuItem("Data", tabName = "data", icon = icon("table"))
+      menuItem("Data", tabName = "data", icon = icon("table")),
+      # Tambahkan selector kota di overview
+      selectInput("city_filter_overview", "Pilih Kota:", choices = NULL)
     )
   ),
   
@@ -105,6 +112,20 @@ ui <- dashboardPage(
                   solidHeader = TRUE,
                   plotOutput("region_stats"),
                   width = 4
+                ),
+                box(
+                  title = "Distribusi Rata-rata Luas Rumah",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotOutput("volume_dist"),
+                  width = 6
+                ),
+                box(
+                  title = "Proporsi Furnishing",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotlyOutput("furnishing_pie"),
+                  width = 6
                 )
               )
       ),
@@ -167,6 +188,27 @@ server <- function(input, output, session) {
       type = "error"
     )
     return(NULL)
+  })
+  
+  # Observer untuk mengisi pilihan kota
+  observe({
+    req(houses_data)
+    cities <- c("Semua", unique(houses_data$location))
+    updateSelectInput(session, "city_filter_overview", choices = cities)
+  })
+  
+  # Fungsi untuk memfilter data berdasarkan kota di overview
+  filtered_data_overview <- reactive({
+    req(houses_data, input$city_filter_overview)
+    
+    data <- houses_data
+    
+    # Filter berdasarkan kota jika tidak dipilih "Semua"
+    if (input$city_filter_overview != "Semua") {
+      data <- data %>% filter(location == input$city_filter_overview)
+    }
+    
+    return(data)
   })
   
   # Dynamic UI elements
@@ -264,20 +306,39 @@ server <- function(input, output, session) {
       )
   })
   
-  output$region_stats <- renderPlot({
+  output$volume_dist <- renderPlot({
     req(filtered_data())
-    filtered_data() %>%
+    ggplot(filtered_data(), aes(x = building_size_m2)) +
+      geom_histogram(bins = 30, fill = "#03A9F4", color = "black") +
+      scale_x_log10() + # Log-scale untuk mengatasi skewness
+      labs(
+        title = "Distribusi Luas Rumah di Jabodetabek", 
+        x = "Luas Rumah (m2, log-scale)", 
+        y = "Jumlah"
+      ) +
+      theme_minimal()
+  })
+  
+  # Plot Statistik per Wilayah
+  output$region_stats <- renderPlot({
+    req(filtered_data_overview())
+    filtered_data_overview() %>%
       group_by(location) %>%
       summarise(avg_price = mean(price_billion)) %>%
       ggplot(aes(x = reorder(location, -avg_price), y = avg_price)) +
       geom_bar(stat = "identity", fill = "lightblue") +
       theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+        axis.title = element_text(size = 10),
+        plot.title = element_text(size = 12)
+      ) +
       labs(
         title = "Rata-rata Harga per Wilayah",
         x = "Wilayah",
-        y = "Harga (Miliar Rupiah)"
-      )
+        y = "Harga (Miliar)"
+      ) +
+      coord_cartesian(expand = TRUE)
   })
   
   output$price_size_scatter <- renderPlot({
@@ -306,17 +367,56 @@ server <- function(input, output, session) {
       )
   })
   
+  # Dalam server function
+  output$furnishing_pie <- renderPlotly({
+    req(houses_data)
+    
+    # Hitung proporsi setiap kategori furnishing
+    furnishing_data <- houses_data %>%
+      count(furnishing) %>%
+      mutate(
+        Percentage = n / sum(n) * 100,
+        label = paste0(furnishing, "\n", round(Percentage, 1), "%")
+      )
+    
+    # Buat pie chart 3D menggunakan plotly
+    plot_ly(
+      data = furnishing_data,
+      type = "pie",
+      labels = ~label,
+      values = ~Percentage,
+      textinfo = "label",
+      hoverinfo = "none",
+      hole = 0.3,  # Menambahkan efek donat untuk kesan 3D
+      marker = list(
+        colors = c("#66c2a5", "#fc8d62", "#8da0cb"),  # Pilihan warna yang berbeda
+        line = list(color = "#FFFFFF", width = 2)
+      )
+    ) %>%
+      layout(
+        title = list(
+          text = "Proporsi Furnishing",
+          font = list(size = 16)
+        ),
+        showlegend = TRUE,
+        margin = list(t = 50, b = 50, l = 50, r = 50)
+      ) %>%
+      # Tambahkan efek 3D
+      config(displayModeBar = FALSE)
+  })
+  
   # Data Table
   output$house_data <- renderDT({
     req(filtered_data())
     filtered_data() %>%
-      select(location, price_billion, building_size_m2, land_size_m2, price_per_sqm) %>%
+      select(location, price_billion, building_size_m2, land_size_m2, price_per_sqm, floors) %>%
       rename(
         "Lokasi" = location,
         "Harga (Miliar)" = price_billion,
         "Luas Bangunan (m²)" = building_size_m2,
         "Luas Tanah (m²)" = land_size_m2,
-        "Harga/m²" = price_per_sqm
+        "Harga/m²" = price_per_sqm,
+        "Jumlah Lantai" = floors
       ) %>%
       datatable(
         options = list(

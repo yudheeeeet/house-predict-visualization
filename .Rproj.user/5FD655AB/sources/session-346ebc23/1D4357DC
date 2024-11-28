@@ -3,7 +3,7 @@
     "path": "~/Documents/Kuliah_Statistika/Eksplorasi dan Visualisasi Data/shiny-dashboardvisdat/shiny-visdat/app.R",
     "project_path": "app.R",
     "type": "r_source",
-    "hash": "0",
+    "hash": "3415340178",
     "contents": "",
     "dirty": false,
     "created": 1731929335885.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "51,15",
-        "scrollLine": "40"
+        "cursorPosition": "127,27",
+        "scrollLine": "109"
     },
     "folds": "",
-    "lastKnownWriteTime": 1732264605,
+    "lastKnownWriteTime": 1732807769,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1732264605872,
+    "last_content_update": 1732807769429,
     "read_only": false,
     "read_only_alternatives": []
 }
