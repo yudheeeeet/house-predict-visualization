@@ -1,5 +1,4 @@
 # app.R
-
 # Pastikan untuk menambahkan library plotly di bagian awal script
 library(plotly)
 
@@ -35,7 +34,16 @@ load_house_data <- function() {
         price_per_sqm = price_in_rp / building_size_m2,
         location = factor(str_to_title(city)),  # Capitalize location names
         floors = floors,
-        furnishing = factor(furnishing)
+        furnishing = factor(furnishing),
+        lat = lat,
+        long = long,
+        district = district,
+        address = address,
+        carports = carports,
+        electricity = electricity,
+        property_condition = property_condition,
+        building_orientation = building_orientation,
+        garages = garages
       ) %>%
       filter(
         price_billion > 0,
@@ -57,8 +65,8 @@ load_house_data <- function() {
       land_size_m2 = runif(100, 60, 1000)
     ) %>%
       mutate(
-        price_billion = price_in_rp / 1e9,
-        price_per_sqm = price_in_rp / building_size_m2,
+        price_billion = price / 1e9,
+        price_per_sqm = price / building_size_m2,
         location = factor(location)
       )
     
@@ -74,8 +82,8 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Overview", tabName = "overview", icon = icon("dashboard")),
       menuItem("Analisis Harga", tabName = "price_analysis", icon = icon("chart-line")),
+      menuItem("Sebaran Harga Rumah", tabName = "price_distribution", icon = icon("map-marker")),
       menuItem("Data", tabName = "data", icon = icon("table")),
-      # Tambahkan selector kota di overview
       selectInput("city_filter_overview", "Pilih Kota:", choices = NULL)
     )
   ),
@@ -84,7 +92,7 @@ ui <- dashboardPage(
     tags$head(
       tags$style(HTML("
         .content-wrapper, .right-side {
-          background-color: #f4f6f9;
+          background-color: #dfd7d0;
         }
       "))
     ),
@@ -125,6 +133,36 @@ ui <- dashboardPage(
                   status = "primary",
                   solidHeader = TRUE,
                   plotlyOutput("furnishing_pie"),
+                  width = 6
+                )
+              )
+      ),
+      
+      # Price Distribution Tab
+      tabItem(tabName = "price_distribution",
+              fluidRow(
+                box(
+                  title = "Peta Sebaran Harga Rumah",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  leafletOutput("price_distribution_map"),
+                  width = 12
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Statistik Harga per Kecamatan",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  uiOutput("region_dropdown"),
+                  plotOutput("district_price_stats"),
+                  width = 6
+                ),
+                box(
+                  title = "Boxplot Harga per Kecamatan",
+                  status = "primary", 
+                  solidHeader = TRUE,
+                  plotOutput("district_price_boxplot"),
                   width = 6
                 )
               )
@@ -297,7 +335,7 @@ server <- function(input, output, session) {
   output$price_dist <- renderPlot({
     req(filtered_data())
     ggplot(filtered_data(), aes(x = price_billion)) +
-      geom_histogram(fill = "steelblue", bins = 30) +
+      geom_histogram(fill = "red", bins = 30) +
       theme_minimal() +
       labs(
         title = "Distribusi Harga Rumah",
@@ -308,15 +346,33 @@ server <- function(input, output, session) {
   
   output$volume_dist <- renderPlot({
     req(filtered_data())
-    ggplot(filtered_data(), aes(x = building_size_m2)) +
-      geom_histogram(bins = 30, fill = "#03A9F4", color = "black") +
-      scale_x_log10() + # Log-scale untuk mengatasi skewness
+    
+    # Gradient warna
+    color_gradient <- scale_fill_gradient(
+      low = "#f19314",   # Warna biru muda
+      high = "#e712ea"   # Warna biru tua
+    )
+    
+    # Alternatif: Menggunakan warna bertingkat
+    ggplot(filtered_data(), aes(x = building_size_m2, fill = ..count..)) +
+      geom_histogram(
+        bins = 30, 
+        color = "white",   # Border putih untuk memisahkan batang
+        alpha = 0.7        # Sedikit transparansi
+      ) +
+      scale_x_log10() +   # Log-scale untuk mengatasi skewness
+      color_gradient +    # Gradient warna berdasarkan jumlah
       labs(
         title = "Distribusi Luas Rumah di Jabodetabek", 
         x = "Luas Rumah (m2, log-scale)", 
         y = "Jumlah"
       ) +
-      theme_minimal()
+      theme_minimal() +
+      theme(
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.title = element_text(color = "darkgrey"),
+        legend.position = "right"
+      )
   })
   
   # Plot Statistik per Wilayah
@@ -405,18 +461,114 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
   
+  # Tambahkan fungsi render di dalam server function
+  # Peta Sebaran Harga
+  output$price_distribution_map <- renderLeaflet({
+    req(houses_data)
+    
+    # Tentukan warna berdasarkan rentang harga
+    color_palette <- colorNumeric(
+      palette = "YlOrRd", 
+      domain = houses_data$price_billion
+    )
+    
+    leaflet(houses_data) %>%
+      addTiles() %>%
+      addCircleMarkers(
+        lng = ~long, 
+        lat = ~lat,
+        radius = 5,
+        color = ~color_palette(price_billion),
+        fillOpacity = 0.7,
+        popup = paste(
+          "Lokasi:", houses_data$address, 
+          "<br>Harga:", round(houses_data$price_billion, 2), "Miliar",
+          "<br>Luas Bangunan:", round(houses_data$building_size_m2, 0), "m²"
+        )
+      ) %>%
+      addLegend(
+        pal = color_palette, 
+        values = ~price_billion,
+        title = "Harga Rumah (Miliar)"
+      )
+  })
+  
+  # Statistik Harga per Kecamatan
+  output$district_price_stats <- renderPlot({
+    req(houses_data)
+    
+    # Define the cities in Jabodetabek region
+    jabodetabek_cities <- c(
+      "Jakarta Selatan", "Jakarta Pusat", "Jakarta Barat", 
+      "Jakarta Timur", "Jakarta Utara", "Bogor", "Tangerang", 
+      "Bekasi", "Depok", "Tangerang Selatan"
+    )
+    
+    # Create a reactive value to store the selected region
+    selected_region <- reactiveVal("semua")
+    
+    # UI code to create the dropdown menu
+    output$region_dropdown <- renderUI({
+      selectInput("region", "Pilih Wilayah:", 
+                  choices = c("Semua", jabodetabek_cities), 
+                  selected = selected_region())
+    })
+    
+    # Filter the data based on the selected region
+    district_stats <- houses_data %>%
+      filter(
+        if (input$region == "Semua") TRUE else city %in% input$region
+      ) %>%
+      group_by(district) %>%
+      summarise(
+        avg_price = mean(price_billion),
+        median_price = median(price_billion)
+      ) %>%
+      arrange(desc(avg_price))
+    
+    # Update the selected_region reactive value
+    selected_region(input$region)
+    
+    ggplot(district_stats, aes(x = reorder(district, -avg_price), y = avg_price)) +
+      geom_bar(stat = "identity", fill = "coral") +
+      theme_minimal() +
+      labs(
+        title = "Rata-rata Harga Rumah per Kecamatan di Jabodetabek",
+        x = "Kecamatan",
+        y = "Harga Rata-rata (Miliar)"
+      ) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Boxplot Harga per Kecamatan
+  output$district_price_boxplot <- renderPlot({
+    req(houses_data)
+    
+    ggplot(houses_data, aes(x = city, y = price_billion)) +
+      geom_boxplot(fill = "skyblue") +
+      theme_minimal() +
+      labs(
+        title = "Distribusi Harga Rumah per Kecamatan",
+        x = "Kecamatan",
+        y = "Harga (Miliar)"
+      ) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
   # Data Table
   output$house_data <- renderDT({
     req(filtered_data())
     filtered_data() %>%
-      select(location, price_billion, building_size_m2, land_size_m2, price_per_sqm, floors) %>%
+      select(district, location, price_billion, building_size_m2, land_size_m2, floors, furnishing, garages) %>%
       rename(
+        "Distrik" = district,
         "Lokasi" = location,
-        "Harga (Miliar)" = price_billion,
         "Luas Bangunan (m²)" = building_size_m2,
         "Luas Tanah (m²)" = land_size_m2,
-        "Harga/m²" = price_per_sqm,
-        "Jumlah Lantai" = floors
+        "Jumlah Lantai" = floors,
+        "Status Perabotan" = furnishing,
+        "Jumlah Garasi" = garages,
+        "Harga (Rp. Miliar)" = price_billion
       ) %>%
       datatable(
         options = list(

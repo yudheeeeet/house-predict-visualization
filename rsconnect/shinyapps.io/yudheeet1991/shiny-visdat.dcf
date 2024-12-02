@@ -1,0 +1,12 @@
+name: shiny-visdat
+title: shiny-visdat
+username: yudheeet1991
+account: yudheeet1991
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13478309
+bundleId: 9434476
+url: https://yudheeet1991.shinyapps.io/shiny-visdat/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
