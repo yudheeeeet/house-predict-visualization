@@ -18,7 +18,7 @@ library(stringr)
 load_house_data <- function() {
   tryCatch({
     # Use the exact file name from your directory
-    data_path <- "data_new.csv"
+    data_path <- "data_baru2.csv"
     
     if (!file.exists(data_path)) {
       stop("Data file not found at: ", data_path)
@@ -31,7 +31,7 @@ load_house_data <- function() {
       na.omit() %>%
       mutate(
         price_billion = price_in_rp / 1e9,  # Convert to billions
-        price_per_sqm = price_in_rp / building_size_m2,
+        price_per_sqm = price_in_rp / total_size,
         location = factor(str_to_title(city)),  # Capitalize location names
         floors = floors,
         furnishing = factor(furnishing),
@@ -47,7 +47,7 @@ load_house_data <- function() {
       ) %>%
       filter(
         price_billion > 0,
-        building_size_m2 > 0
+        total_size > 0
       )
     
     return(data)
@@ -61,12 +61,12 @@ load_house_data <- function() {
     sample_data <- data.frame(
       location = rep(c("Jakarta", "Bogor", "Depok", "Tangerang", "Bekasi"), each=20),
       price = runif(100, 500000000, 5000000000),
-      building_size_m2 = runif(100, 36, 500),
+      total_size = runif(100, 36, 500),
       land_size_m2 = runif(100, 60, 1000)
     ) %>%
       mutate(
         price_billion = price / 1e9,
-        price_per_sqm = price / building_size_m2,
+        price_per_sqm = price / total_size,
         location = factor(location)
       )
     
@@ -80,6 +80,7 @@ ui <- dashboardPage(
   
   dashboardSidebar(
     sidebarMenu(
+      menuItem("Beranda", tabName = "home", icon = icon("home")),
       menuItem("Overview", tabName = "overview", icon = icon("dashboard")),
       menuItem("Analisis Harga", tabName = "price_analysis", icon = icon("chart-line")),
       menuItem("Sebaran Harga Rumah", tabName = "price_distribution", icon = icon("map-marker")),
@@ -96,8 +97,39 @@ ui <- dashboardPage(
         }
       "))
     ),
-    
     tabItems(
+      # Tab Beranda
+      tabItem(tabName = "home",
+              fluidRow(
+                box(
+                  title = "Selamat Datang di Dashboard Analisis Rumah Jabodetabek",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  width = 12,
+                  p("Dashboard ini dirancang untuk menganalisis data harga rumah di wilayah Jabodetabek."),
+                  p("Berikut adalah beberapa fitur utama:"),
+                  tags$ul(
+                    tags$li("Overview: Menampilkan ringkasan statistik harga rumah."),
+                    tags$li("Analisis Harga: Menyediakan analisis mendalam mengenai harga rumah."),
+                    tags$li("Sebaran Harga Rumah: Peta interaktif dan statistik harga."),
+                    tags$li("Data: Menampilkan dataset lengkap untuk referensi.")
+                  ),
+                  p("Silahkan pilih menu sesuai yang diinginkan!")
+                ),
+                box(
+                  title = "Informasi Kelompok",
+                  status = "success",
+                  solidHeader = TRUE,
+                  width = 12,
+                  h4("Anggota:"),
+                  tags$ul(
+                    tags$li("Rachmat Bintang Yudhianto - G1501231030"),
+                    tags$li("Yunna Mentari Indah - G1501231017"),
+                  )
+                  )
+              )
+      ),
+      
       # Overview Tab
       tabItem(tabName = "overview",
               fluidRow(
@@ -231,7 +263,7 @@ server <- function(input, output, session) {
   # Observer untuk mengisi pilihan kota
   observe({
     req(houses_data)
-    cities <- c("Semua", unique(houses_data$location))
+    cities <- c("Semua", unique(houses_data$city))
     updateSelectInput(session, "city_filter_overview", choices = cities)
   })
   
@@ -283,7 +315,7 @@ server <- function(input, output, session) {
       filter(
         price_billion >= input$price_range[1],
         price_billion <= input$price_range[2],
-        building_size_m2 >= input$min_size
+        total_size >= input$min_size
       )
   })
   
@@ -322,7 +354,7 @@ server <- function(input, output, session) {
   
   output$avg_size <- renderValueBox({
     req(filtered_data())
-    avg <- mean(filtered_data()$building_size_m2)
+    avg <- mean(filtered_data()$total_size)
     valueBox(
       paste0(round(avg, 0), " m²"),
       "Rata-rata Luas Bangunan",
@@ -354,7 +386,7 @@ server <- function(input, output, session) {
     )
     
     # Alternatif: Menggunakan warna bertingkat
-    ggplot(filtered_data(), aes(x = building_size_m2, fill = ..count..)) +
+    ggplot(filtered_data(), aes(x = total_size, fill = ..count..)) +
       geom_histogram(
         bins = 30, 
         color = "white",   # Border putih untuk memisahkan batang
@@ -399,7 +431,7 @@ server <- function(input, output, session) {
   
   output$price_size_scatter <- renderPlot({
     req(filtered_data())
-    ggplot(filtered_data(), aes(x = building_size_m2, y = price_billion)) +
+    ggplot(filtered_data(), aes(x = total_size, y = price_billion)) +
       geom_point(alpha = 0.5) +
       geom_smooth(method = "lm", se = FALSE, color = "red") +
       theme_minimal() +
@@ -483,7 +515,7 @@ server <- function(input, output, session) {
         popup = paste(
           "Lokasi:", houses_data$address, 
           "<br>Harga:", round(houses_data$price_billion, 2), "Miliar",
-          "<br>Luas Bangunan:", round(houses_data$building_size_m2, 0), "m²"
+          "<br>Luas Bangunan:", round(houses_data$total_size, 0), "m²"
         )
       ) %>%
       addLegend(
@@ -559,12 +591,11 @@ server <- function(input, output, session) {
   output$house_data <- renderDT({
     req(filtered_data())
     filtered_data() %>%
-      select(district, location, price_billion, building_size_m2, land_size_m2, floors, furnishing, garages) %>%
+      select(district, location, price_billion, total_size, floors, furnishing, garages) %>%
       rename(
         "Distrik" = district,
         "Lokasi" = location,
-        "Luas Bangunan (m²)" = building_size_m2,
-        "Luas Tanah (m²)" = land_size_m2,
+        "Total Luas Rumah (m²)" = total_size,
         "Jumlah Lantai" = floors,
         "Status Perabotan" = furnishing,
         "Jumlah Garasi" = garages,
