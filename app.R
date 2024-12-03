@@ -229,6 +229,7 @@ ui <- dashboardPage(
                   status = "primary",
                   solidHeader = TRUE,
                   plotOutput("price_size_scatter"),
+                  verbatimTextOutput("regression_summary"),
                   width = 9
                 )
               ),
@@ -452,6 +453,65 @@ server <- function(input, output, session) {
         x = "Luas Bangunan (m²)",
         y = "Harga (Miliar Rupiah)"
       )
+  })
+  
+  output$regression_summary <- renderPrint({
+    req(filtered_data())
+    # Perform linear regression
+    regression_model <- lm(price_billion ~ total_size, data = filtered_data())
+    
+    # Create a summary with additional insights
+    summary_text <- capture.output({
+      cat("Analisis Regresi Linier: Harga vs Luas Bangunan\n")
+      cat("------------------------------------------------\n")
+      
+      # Coefficients
+      coef_summary <- summary(regression_model)
+      
+      # R-squared
+      r_squared <- coef_summary$r.squared
+      
+      # Intercept and Slope
+      intercept <- coef(regression_model)[1]
+      slope <- coef(regression_model)[2]
+      
+      # P-values
+      p_values <- coef_summary$coefficients[,4]
+      
+      # Print key statistics
+      cat(sprintf("Persamaan Regresi: Harga = %.2f + %.2f * Luas Bangunan\n", 
+                  intercept, slope))
+      cat(sprintf("R-squared: %.4f\n", r_squared))
+      cat("\nInterpretasi:\n")
+      
+      # Slope interpretation
+      if (slope > 0) {
+        cat("- Terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
+        cat(sprintf("- Setiap kenaikan 1 m² luas bangunan, harga rumah diperkirakan naik Rp %.2f miliar\n", slope))
+      } else {
+        cat("- Tidak terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
+      }
+      
+      # R-squared interpretation
+      cat("\nKualitas Model:\n")
+      if (r_squared < 0.3) {
+        cat("- Model regresi lemah: Luas bangunan menjelaskan sedikit variasi harga rumah\n")
+      } else if (r_squared < 0.6) {
+        cat("- Model regresi sedang: Luas bangunan cukup menjelaskan variasi harga rumah\n")
+      } else {
+        cat("- Model regresi kuat: Luas bangunan sangat menjelaskan variasi harga rumah\n")
+      }
+      
+      # Significance check
+      if (p_values[2] < 0.05) {
+        cat("\nNote: Hubungan antara luas bangunan dan harga secara statistik signifikan (p < 0.05)\n")
+      } else {
+        cat("\nNote: Hubungan antara luas bangunan dan harga tidak signifikan secara statistik\n")
+      }
+    })
+    
+    # Return the summary text
+    summary_text
   })
   
   output$price_per_sqm <- renderPlot({
