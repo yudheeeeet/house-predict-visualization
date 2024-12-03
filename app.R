@@ -102,6 +102,18 @@ ui <- dashboardPage(
       tabItem(tabName = "home",
               fluidRow(
                 box(
+                  title = "Analisis Harga Jual Beli Perumahan di Jabodetabek",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  width = 12,
+                  # Use tags$img() to include the image
+                  tags$img(
+                    src = "rumah.png",  # Just the filename, no full path
+                    alt = "Ilustrasi Proyek",
+                    style = "max-width:100%; height:auto; display:block; margin:0 auto;"
+                  )
+                ),
+                box(
                   title = "Selamat Datang di Dashboard Analisis Rumah Jabodetabek",
                   status = "primary",
                   solidHeader = TRUE,
