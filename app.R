@@ -220,7 +220,7 @@ ui <- dashboardPage(
                   status = "primary",
                   solidHeader = TRUE,
                   width = 3,
-                  uiOutput("region_selector"),
+                  uiOutput("region_selector_names"),
                   uiOutput("price_range_slider"),
                   uiOutput("size_input")
                 ),
@@ -280,6 +280,25 @@ server <- function(input, output, session) {
     updateSelectInput(session, "city_filter_overview", choices = cities)
   })
   
+  output$region_selector_names <- renderUI({
+    req(houses_data)
+    
+    # Mendapatkan daftar nama wilayah dari dataset
+    region_names <- c("Semua", unique(houses_data$city))
+    
+    # Pilih "Semua" sebagai default jika tidak ada pilihan
+    default_selection <- if(length(region_names) > 1) "Semua" else region_names[1]
+    
+    selectInput(
+      inputId = "selected_region_name", 
+      label = "Pilih Wilayah", 
+      choices = region_names, 
+      selected = default_selection
+    )
+  })
+  
+  
+  
   # Fungsi untuk memfilter data berdasarkan kota di overview
   filtered_data_overview <- reactive({
     req(houses_data, input$city_filter_overview)
@@ -297,7 +316,7 @@ server <- function(input, output, session) {
   # Dynamic UI elements
   output$region_selector <- renderUI({
     req(houses_data)
-    regions <- c("Semua", unique(houses_data$location))
+    regions <- c("Semua", unique(houses_data$city))
     selectInput("region", "Pilih Wilayah:", choices = regions)
   })
   
@@ -379,8 +398,16 @@ server <- function(input, output, session) {
   # Plots
   output$price_dist <- renderPlot({
     req(filtered_data())
-    ggplot(filtered_data(), aes(x = price_billion)) +
-      geom_histogram(fill = "red", bins = 30) +
+    ggplot(filtered_data(), aes(x = price_billion, fill = stat(count))) +
+      geom_histogram(
+        bins = 30, 
+        color = "white",
+        alpha = 0.7
+      ) +
+      scale_fill_viridis_c(
+        option = "plasma",  # Pilihan warna: "viridis", "magma", "inferno", "plasma"
+        direction = 1
+      ) +
       theme_minimal() +
       labs(
         title = "Distribusi Harga Rumah",
