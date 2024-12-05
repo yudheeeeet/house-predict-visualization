@@ -85,6 +85,7 @@ ui <- dashboardPage(
       menuItem("Analisis Harga", tabName = "price_analysis", icon = icon("chart-line")),
       menuItem("Sebaran Harga Rumah", tabName = "price_distribution", icon = icon("map-marker")),
       menuItem("Data", tabName = "data", icon = icon("table")),
+      menuItem("Analisis Cluster", tabName = "cluster_analysis", icon = icon("chart-area")),
       selectInput("city_filter_overview", "Pilih Kota:", choices = NULL)
     )
   ),
@@ -212,6 +213,25 @@ ui <- dashboardPage(
               )
       ),
       
+      tabItem(tabName = "cluster_analysis",
+              fluidRow(
+                box(
+                  title = "Cluster Analysis Radar Plot",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  plotlyOutput("cluster_radar_plot"),
+                  width = 8
+                ),
+                box(
+                  title = "Cluster Descriptions",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  uiOutput("cluster_descriptions"),
+                  width = 4
+                )
+              )
+      ),
+      
       # Price Analysis Tab
       tabItem(tabName = "price_analysis",
               fluidRow(
@@ -220,7 +240,7 @@ ui <- dashboardPage(
                   status = "primary",
                   solidHeader = TRUE,
                   width = 3,
-                  uiOutput("region_selector_names"),
+                  uiOutput("region_selector"),
                   uiOutput("price_range_slider"),
                   uiOutput("size_input")
                 ),
@@ -280,25 +300,6 @@ server <- function(input, output, session) {
     updateSelectInput(session, "city_filter_overview", choices = cities)
   })
   
-  output$region_selector_names <- renderUI({
-    req(houses_data)
-    
-    # Mendapatkan daftar nama wilayah dari dataset
-    region_names <- c("Semua", unique(houses_data$city))
-    
-    # Pilih "Semua" sebagai default jika tidak ada pilihan
-    default_selection <- if(length(region_names) > 1) "Semua" else region_names[1]
-    
-    selectInput(
-      inputId = "selected_region_name", 
-      label = "Pilih Wilayah", 
-      choices = region_names, 
-      selected = default_selection
-    )
-  })
-  
-  
-  
   # Fungsi untuk memfilter data berdasarkan kota di overview
   filtered_data_overview <- reactive({
     req(houses_data, input$city_filter_overview)
@@ -313,10 +314,132 @@ server <- function(input, output, session) {
     return(data)
   })
   
+  output$cluster_radar_plot <- renderPlotly({
+    req(houses_data)
+    
+    # Perform k-means clustering
+    clustering_data <- houses_data %>%
+      select(long, lat, price_billion, total_size) %>%
+      scale()
+    
+    set.seed(123)
+    kmeans_result <- kmeans(clustering_data, centers = 5)
+    
+    # Aggregate cluster characteristics
+    cluster_summary <- houses_data %>%
+      mutate(cluster = kmeans_result$cluster) %>%
+      group_by(cluster) %>%
+      summarise(
+        avg_price = mean(price_billion),
+        avg_size = mean(total_size),
+        avg_longitude = mean(long),
+        avg_latitude = mean(lat),
+        total_houses = n()
+      )
+    
+    # Normalize for radar plot
+    radar_data <- cluster_summary %>%
+      mutate(
+        avg_price_scaled = scales::rescale(avg_price),
+        avg_size_scaled = scales::rescale(avg_size),
+        longitude_scaled = scales::rescale(avg_longitude),
+        latitude_scaled = scales::rescale(avg_latitude),
+        total_houses_scaled = scales::rescale(total_houses)
+      )
+    
+    # Create radar plot
+    plot_ly(
+      type = 'scatterpolar',
+      mode = 'lines+markers'
+    ) %>%
+      add_trace(
+        r = radar_data$avg_price_scaled,
+        theta = c('Price', 'Size', 'Longitude', 'Latitude', 'Total Houses'),
+        fill = 'toself',
+        name = 'Cluster 1'
+      ) %>%
+      add_trace(
+        r = radar_data$avg_size_scaled,
+        theta = c('Price', 'Size', 'Longitude', 'Latitude', 'Total Houses'),
+        fill = 'toself',
+        name = 'Cluster 2'
+      ) %>%
+      add_trace(
+        r = radar_data$longitude_scaled,
+        theta = c('Price', 'Size', 'Longitude', 'Latitude', 'Total Houses'),
+        fill = 'toself',
+        name = 'Cluster 3'
+      ) %>%
+      add_trace(
+        r = radar_data$latitude_scaled,
+        theta = c('Price', 'Size', 'Longitude', 'Latitude', 'Total Houses'),
+        fill = 'toself',
+        name = 'Cluster 4'
+      ) %>%
+      add_trace(
+        r = radar_data$total_houses_scaled,
+        theta = c('Price', 'Size', 'Longitude', 'Latitude', 'Total Houses'),
+        fill = 'toself',
+        name = 'Cluster 5'
+      ) %>%
+      layout(
+        polar = list(
+          radialaxis = list(
+            visible = TRUE,
+            range = c(0,1)
+          )
+        ),
+        title = "Cluster Characteristics Radar Plot"
+      )
+  })
+  
+  output$cluster_descriptions <- renderUI({
+    req(houses_data)
+    
+    # Perform clustering
+    clustering_data <- houses_data %>%
+      select(long, lat, price_billion, total_size) %>%
+      scale()
+    
+    set.seed(123)
+    kmeans_result <- kmeans(clustering_data, centers = 5)
+    
+    # Aggregate cluster characteristics
+    cluster_summary <- houses_data %>%
+      mutate(cluster = kmeans_result$cluster) %>%
+      group_by(cluster) %>%
+      summarise(
+        avg_price = mean(price_billion),
+        avg_size = mean(total_size),
+        avg_longitude = mean(long),
+        avg_latitude = mean(lat),
+        total_houses = n()
+      )
+    
+    # Generate descriptions
+    descriptions <- lapply(1:5, function(i) {
+      cluster_info <- cluster_summary[cluster_summary$cluster == i, ]
+      
+      HTML(paste0(
+        "<h4>Cluster ", i, "</h4>",
+        "<p>",
+        "Average Price: Rp ", round(cluster_info$avg_price, 2), " Miliar<br>",
+        "Average Size: ", round(cluster_info$avg_size, 2), " m²<br>",
+        "Total Houses: ", cluster_info$total_houses, "<br>",
+        "Geographical Center: (", 
+        round(cluster_info$avg_longitude, 4), ", ", 
+        round(cluster_info$avg_latitude, 4), ")",
+        "</p>"
+      ))
+    })
+    
+    do.call(tagList, descriptions)
+  })
+  
   # Dynamic UI elements
   output$region_selector <- renderUI({
     req(houses_data)
-    regions <- c("Semua", unique(houses_data$city))
+    regions <- c("Semua", unique(houses_data$location))
     selectInput("region", "Pilih Wilayah:", choices = regions)
   })
   
@@ -398,16 +521,8 @@ server <- function(input, output, session) {
   # Plots
   output$price_dist <- renderPlot({
     req(filtered_data())
-    ggplot(filtered_data(), aes(x = price_billion, fill = stat(count))) +
-      geom_histogram(
-        bins = 30, 
-        color = "white",
-        alpha = 0.7
-      ) +
-      scale_fill_viridis_c(
-        option = "plasma",  # Pilihan warna: "viridis", "magma", "inferno", "plasma"
-        direction = 1
-      ) +
+    ggplot(filtered_data(), aes(x = price_billion)) +
+      geom_histogram(fill = "red", bins = 30) +
       theme_minimal() +
       labs(
         title = "Distribusi Harga Rumah",
@@ -483,63 +598,63 @@ server <- function(input, output, session) {
   })
   
   output$regression_summary <- renderPrint({
-    req(filtered_data())
-    # Perform linear regression
-    regression_model <- lm(price_billion ~ total_size, data = filtered_data())
+  req(filtered_data())
+  # Perform linear regression
+  regression_model <- lm(price_billion ~ total_size, data = filtered_data())
+  
+  # Create a summary with additional insights
+  summary_text <- capture.output({
+    cat("Analisis Regresi Linier: Harga vs Luas Bangunan\n")
+    cat("------------------------------------------------\n")
     
-    # Create a summary with additional insights
-    summary_text <- capture.output({
-      cat("Analisis Regresi Linier: Harga vs Luas Bangunan\n")
-      cat("------------------------------------------------\n")
-      
-      # Coefficients
-      coef_summary <- summary(regression_model)
-      
-      # R-squared
-      r_squared <- coef_summary$r.squared
-      
-      # Intercept and Slope
-      intercept <- coef(regression_model)[1]
-      slope <- coef(regression_model)[2]
-      
-      # P-values
-      p_values <- coef_summary$coefficients[,4]
-      
-      # Print key statistics
-      cat(sprintf("Persamaan Regresi: Harga = %.2f + %.2f * Luas Bangunan\n", 
-                  intercept, slope))
-      cat(sprintf("R-squared: %.4f\n", r_squared))
-      cat("\nInterpretasi:\n")
-      
-      # Slope interpretation
-      if (slope > 0) {
-        cat("- Terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
-        cat(sprintf("- Setiap kenaikan 1 m² luas bangunan, harga rumah diperkirakan naik Rp %.2f miliar\n", slope))
-      } else {
-        cat("- Tidak terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
-      }
-      
-      # R-squared interpretation
-      cat("\nKualitas Model:\n")
-      if (r_squared < 0.3) {
-        cat("- Model regresi lemah: Luas bangunan menjelaskan sedikit variasi harga rumah\n")
-      } else if (r_squared < 0.6) {
-        cat("- Model regresi sedang: Luas bangunan cukup menjelaskan variasi harga rumah\n")
-      } else {
-        cat("- Model regresi kuat: Luas bangunan sangat menjelaskan variasi harga rumah\n")
-      }
-      
-      # Significance check
-      if (p_values[2] < 0.05) {
-        cat("\nNote: Hubungan antara luas bangunan dan harga secara statistik signifikan (p < 0.05)\n")
-      } else {
-        cat("\nNote: Hubungan antara luas bangunan dan harga tidak signifikan secara statistik\n")
-      }
-    })
+    # Coefficients
+    coef_summary <- summary(regression_model)
     
-    # Return the summary text
-    summary_text
+    # R-squared
+    r_squared <- coef_summary$r.squared
+    
+    # Intercept and Slope
+    intercept <- coef(regression_model)[1]
+    slope <- coef(regression_model)[2]
+    
+    # P-values
+    p_values <- coef_summary$coefficients[,4]
+    
+    # Print key statistics
+    cat(sprintf("Persamaan Regresi: Harga = %.2f + %.2f * Luas Bangunan\n", 
+                intercept, slope))
+    cat(sprintf("R-squared: %.4f\n", r_squared))
+    cat("\nInterpretasi:\n")
+    
+    # Slope interpretation
+    if (slope > 0) {
+      cat("- Terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
+      cat(sprintf("- Setiap kenaikan 1 m² luas bangunan, harga rumah diperkirakan naik Rp %.2f miliar\n", slope))
+    } else {
+      cat("- Tidak terdapat hubungan positif antara luas bangunan dan harga rumah.\n")
+    }
+    
+    # R-squared interpretation
+    cat("\nKualitas Model:\n")
+    if (r_squared < 0.3) {
+      cat("- Model regresi lemah: Luas bangunan menjelaskan sedikit variasi harga rumah\n")
+    } else if (r_squared < 0.6) {
+      cat("- Model regresi sedang: Luas bangunan cukup menjelaskan variasi harga rumah\n")
+    } else {
+      cat("- Model regresi kuat: Luas bangunan sangat menjelaskan variasi harga rumah\n")
+    }
+    
+    # Significance check
+    if (p_values[2] < 0.05) {
+      cat("\nNote: Hubungan antara luas bangunan dan harga secara statistik signifikan (p < 0.05)\n")
+    } else {
+      cat("\nNote: Hubungan antara luas bangunan dan harga tidak signifikan secara statistik\n")
+    }
   })
+  
+  # Return the summary text
+  summary_text
+})
   
   output$price_per_sqm <- renderPlot({
     req(filtered_data())
@@ -597,30 +712,41 @@ server <- function(input, output, session) {
   output$price_distribution_map <- renderLeaflet({
     req(houses_data)
     
-    # Tentukan warna berdasarkan rentang harga
-    color_palette <- colorNumeric(
-      palette = "YlOrRd", 
-      domain = houses_data$price_billion
-    )
+    # Prepare data for k-means clustering
+    clustering_data <- houses_data %>%
+      select(long, lat, price_billion) %>%
+      scale() # Normalize data for clustering
     
+    # Perform k-means clustering (let's use 5 clusters)
+    set.seed(123)
+    kmeans_result <- kmeans(clustering_data, centers = 5)
+    
+    # Add cluster information to original dataset
+    houses_data$cluster <- kmeans_result$cluster
+    
+    # Create a color palette for clusters
+    cluster_colors <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd")
+    
+    # Create leaflet map with clustered markers
     leaflet(houses_data) %>%
       addTiles() %>%
       addCircleMarkers(
         lng = ~long, 
         lat = ~lat,
         radius = 5,
-        color = ~color_palette(price_billion),
+        color = ~cluster_colors[cluster],
         fillOpacity = 0.7,
         popup = paste(
           "Lokasi:", houses_data$address, 
           "<br>Harga:", round(houses_data$price_billion, 2), "Miliar",
-          "<br>Luas Bangunan:", round(houses_data$total_size, 0), "m²"
+          "<br>Luas Bangunan:", round(houses_data$total_size, 0), "m²",
+          "<br>Cluster:", houses_data$cluster
         )
       ) %>%
       addLegend(
-        pal = color_palette, 
-        values = ~price_billion,
-        title = "Harga Rumah (Miliar)"
+        colors = cluster_colors,
+        labels = paste("Cluster", 1:5),
+        title = "Klaster Harga Rumah"
       )
   })
   
