@@ -10,8 +10,8 @@
 ## :bookmark_tabs: Menu
 
 - [Beranda](#pushpin-Beranda)
-- [Analisis Harga](#clipboard-Analisis Harga)
-- [Sebaran Harga Rumah](#camera-Sebaran Harga Rumah)
+- [Analisis Harga](#clipboard-Analisis-Harga)
+- [Sebaran Harga Rumah](#camera-Sebaran-Harga-Rumah)
 - [Data](#card_file_box-Data)
 - [Analisis Cluster](#exclamation-Analisis Cluster)
 - [Database Scheme](#floppy_disk-Database-Scheme)
