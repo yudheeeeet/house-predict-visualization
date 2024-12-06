@@ -27,9 +27,13 @@ Situs ini dirancang untuk membantu dalam memahami dinamika harga properti di wil
 Berikut adalah beberapa fitur utama:
 
 **Overview: Menampilkan ringkasan statistik harga rumah.**
+
 **Analisis Harga: Menyediakan analisis mendalam mengenai harga rumah.**
+
 **Sebaran Harga Rumah: Peta interaktif dan statistik harga.**
+
 **Data: Menampilkan dataset lengkap untuk referensi.**
+
 **Analisis Cluster: memberikan wawasan lebih mendalam mengenai pola pengelompokan harga rumah di wilayah Jabodetabek.**
 
 Kami berharap informasi yang tersedia di sini dapat menjadi panduan yang bermanfaat dalam mengambil keputusan terbaik untuk kebutuhan properti Anda. Terima kasih atas kunjungan Anda, dan selamat menjelajahi!
