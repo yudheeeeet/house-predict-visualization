@@ -9,8 +9,6 @@
 
 ## :bookmark_tabs: Menu
 
-## :bookmark_tabs: Menu
-
 - [Information](#house-Information)
 - [About](#clipboard-About)
 - [Screenshot](#camera-Screenshot)
@@ -20,7 +18,6 @@
 - [ERD](#rotating_light-ERD)
 - [Data Description](#heavy_check_mark-Data-Description)
 - [Folder Structure](#open_file_folder-Folder-Structure)
-- [Our Team](#heavy_heart_exclamation-Our-Team)
 - [Our Team](#heavy_heart_exclamation-Our-Team)
 
 ## 🏠 INFORMATION
@@ -60,17 +57,17 @@ Berikut adalah beberapa fitur utama dalam dashboard:
 
 - Analisis Harga
 <p align="center">
-  <img width="900" height="500" src="www/menu  analisis harga.png">
+  <img width="900" height="500" src="www/menu analisis harga.png">
 </p>
 
 - Sebaran Harga Rumah
 <p align="center">
-  <img width="900" height="500" src="www/menu  sebaran harga rumah.png">
+  <img width="900" height="500" src="www/menu sebaran harga rumah.png">
 </p>
   
 - Analisis Cluster
 <p align="center">
-  <img width="900" height="500" src="www/menu  cluster.png">
+  <img width="900" height="500" src="www/menu cluster.png">
 </p>
 
 
