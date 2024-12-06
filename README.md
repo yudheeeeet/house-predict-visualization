@@ -16,7 +16,7 @@
 - [Analisis Cluster](#exclamation-Analisis-Cluster)
 - [Our Team](#heavy_heart_exclamation-Our-Team)
 
-## :pushpin: Beranda
+## 🏠: Beranda
 :heartpulse: HELLO...!!
 WELCOME TO OUR DASHBOARD! :wave:
 
@@ -37,3 +37,5 @@ Berikut adalah beberapa fitur utama:
 **Analisis Cluster: memberikan wawasan lebih mendalam mengenai pola pengelompokan harga rumah di wilayah Jabodetabek.**
 
 Kami berharap informasi yang tersedia di sini dapat menjadi panduan yang bermanfaat dalam mengambil keputusan terbaik untuk kebutuhan properti Anda. Terima kasih atas kunjungan Anda, dan selamat menjelajahi!
+
+
